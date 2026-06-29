@@ -114,7 +114,7 @@ dependencies {
     
     // Xposed APIs - 支持 LSPosed (API 101+) 和 Legacy Xposed
     // LSPosed libxposed API 1.10.2 (API 101+)
-    compileOnly(libs.lsposed)
+    compileOnly("io.github.libxposed:api:101.0.1")
     // Legacy Xposed API v82 (向后兼容)
     compileOnly(libs.xposed)
     
