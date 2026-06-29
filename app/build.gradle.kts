@@ -51,7 +51,7 @@ android {
 
     defaultConfig {
         applicationId = myPackageName
-        versionCode = 33
+        versionCode = 34
         versionName = gitCommitDateProvider.get().trim()
         buildConfigField("String", "COMMIT_HASH", "\"${gitCommitHashProvider.get().trim()}\"")
     }
@@ -102,18 +102,30 @@ tasks.withType<Test> {
 }
 
 dependencies {
-//    implementation(libs.dexkit)
+    // DEX Kit
+    //    implementation(libs.dexkit)
     implementation(group = "", name = "dexkit-android", ext = "aar")
     implementation(libs.flatbuffers.java) // dexkit dependency
+    
+    // Android & Kotlin
     implementation(libs.annotation)
     implementation(libs.kotlinx.serialization.protobuf)
     implementation(libs.material)
+    
+    // Xposed APIs - 支持 LSPosed (API 101+) 和 Legacy Xposed
+    // LSPosed libxposed API 1.10.2 (API 101+)
+    compileOnly(libs.lsposed)
+    // Legacy Xposed API v82 (向后兼容)
+    compileOnly(libs.xposed)
+    
+    // Stub 模块
+    compileOnly(project(":stub"))
+    
+    // 测试依赖
     testImplementation(kotlin("test-junit5"))
     testImplementation(libs.junit.jupiter.params)
     testImplementation(libs.jadx.core)
     testImplementation(libs.slf4j.simple)
-    compileOnly(libs.xposed)
-    compileOnly(project(":stub"))
 }
 
 androidComponents {
