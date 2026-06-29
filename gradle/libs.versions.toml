@@ -4,6 +4,7 @@ flatbuffersJava = "25.2.10"
 kotlin = "2.3.20"
 dexkit = "2.2.0"
 xposed = "82"
+lsposed = "1.10.2"
 annotation = "1.10.0"
 gson = "2.13.2"
 kotlinxCoroutinesAndroid = "1.10.2"
@@ -16,7 +17,10 @@ material = "1.13.0"
 [libraries]
 dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
 flatbuffers-java = { module = "com.google.flatbuffers:flatbuffers-java", version.ref = "flatbuffersJava" }
+# Legacy Xposed API (向后兼容)
 xposed = { group = "de.robv.android.xposed", name = "api", version.ref = "xposed" }
+# LSPosed libxposed API (API 101+)
+lsposed = { group = "org.lsposed.lsposed", name = "lsposed-api", version.ref = "lsposed" }
 annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
@@ -32,4 +36,3 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 jetbrains-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 jetbrains-kotlin-plugin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-
