@@ -3,6 +3,7 @@ package io.github.chsbuffer.revancedxposed
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -21,30 +22,58 @@ import io.github.chsbuffer.revancedxposed.spotify.SpotifyHook
 import io.github.chsbuffer.revancedxposed.spotify.ThemeHook
 import androidx.core.view.isNotEmpty
 
+/**
+ * 主 Hook 类 - 支持 LSPosed (API 101+) 和 Legacy Xposed
+ * 
+ * 该类实现了两个 Xposed 接口以确保广泛的兼容性：
+ * - IXposedHookLoadPackage: 在应用加载时的钩子
+ * - IXposedHookZygoteInit: Zygote 进程初始化钩子
+ */
 class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
+    companion object {
+        private const val TAG = "ReVanced-Xposed"
+    }
+
     lateinit var startupParam: StartupParam
     lateinit var lpparam: LoadPackageParam
     lateinit var app: Application
     var targetPackageName: String? = null
+    
     val hooksByPackage = mapOf(
         "com.spotify.music" to { SpotifyHook(app, lpparam) },
     )
+
+    init {
+        // 在初始化时检测并初始化 LSPosed 环境
+        try {
+            if (MainHookLSPosed.isRunningOnLSPosed()) {
+                Log.i(TAG, "检测到 LSPosed 环境，初始化 LSPosed 兼容层")
+                MainHookLSPosed.initLSPosed()
+                XposedBridge.log("$TAG: LSPosed (API 101+) 已启用")
+            } else {
+                XposedBridge.log("$TAG: 使用 Legacy Xposed API (v82)")
+            }
+        } catch (e: Exception) {
+            XposedBridge.log("$TAG: 初始化时出错: ${e.message}")
+        }
+    }
 
     fun shouldHook(packageName: String): Boolean {
         if (!hooksByPackage.containsKey(packageName)) return false
         if (targetPackageName == null) targetPackageName = packageName
         return targetPackageName == packageName
     }
+
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (!lpparam.isFirstApplication) return
         if (!shouldHook(lpparam.packageName)) return
         this.lpparam = lpparam
 
-        // --- NUOVO TRIGGER: LONG CLICK SU ICONA PROFILO ---
+        // --- 长按个人资料图标触发器 ---
         XposedHelpers.findAndHookMethod(
             "android.app.Activity",
             lpparam.classLoader,
-            "onPostCreate", // Usiamo onPostCreate per essere sicuri che la UI sia pronta
+            "onPostCreate",
             android.os.Bundle::class.java,
             object : XC_MethodHook() {
                 @SuppressLint("DiscouragedApi")
@@ -52,11 +81,14 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
                     val activity = param.thisObject as Activity
                     if (!activity.javaClass.name.contains("MainActivity")) return
 
-                    // Spotify carica l'avatar in modo asincrono, aspettiamo che la vista sia disposta
+                    // Spotify 以异步方式加载头像，等待视图布局完成
                     val decorView = activity.window.decorView as ViewGroup
                     decorView.viewTreeObserver.addOnGlobalLayoutListener {
-                        // Proviamo a trovare l'avatar tramite ID comuni
-                        val avatarIds = listOf("profile_button", "profile_image", "avatar", "user_avatar", "faceview", "faceheader_image")
+                        // 尝试通过常见 ID 查找头像
+                        val avatarIds = listOf(
+                            "profile_button", "profile_image", "avatar",
+                            "user_avatar", "faceview", "faceheader_image"
+                        )
                         var found = false
 
                         for (idName in avatarIds) {
@@ -70,7 +102,7 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
                             }
                         }
 
-                        // Se non troviamo l'ID, cerchiamo la prima ImageView in alto a sinistra
+                        // 如果未找到，递归搜索左上角的 ImageView
                         if (!found) {
                             findAvatarRecursive(decorView, activity)
                         }
@@ -82,64 +114,64 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
         inContext(lpparam) { app ->
             this.app = app
 
-            // Carichiamo le preferenze una volta sola
+            // 加载偏好设置
             val prefs = app.getSharedPreferences("spotify_prefs", 0)
 
             if (isReVancedPatched(lpparam)) {
-                Utils.showToastLong("ReVanced Xposed FE module does not work with patched app")
+                Utils.showToastLong("ReVanced Xposed FE 模块与已修补的应用不兼容")
                 return@inContext
             }
-            Utils.showToastLong("ReVanced Xposed FE is initializing, please wait...")
+            
+            val frameworkType = MainHookLSPosed.getXposedFrameworkType()
+            Utils.showToastLong("ReVanced Xposed FE 初始化中... ($frameworkType)")
 
-            // --- BLOCCO PREMIUM ---
-            // Ora è isolato: se Roundy sopra crasha, questo verrà comunque eseguito!
+            // --- 高级功能模块 ---
             try {
                 if (prefs.getBoolean("enable_premium", true)) {
                     hooksByPackage[lpparam.packageName]?.invoke()?.Hook()
+                    Log.d(TAG, "高级功能已启用")
                 }
             } catch (e: Exception) {
-                XposedBridge.log("Mod Premium fallita: ${e.message}")
+                XposedBridge.log("$TAG: 高级功能失败 - ${e.message}")
             }
 
-            // --- BLOCCO: AD BLOCK ---
+            // --- 广告拦截模块 ---
             try {
-                // Puoi aggiungere "enable_adblock" nel tuo SettingsSheet più tardi
                 if (prefs.getBoolean("enable_adblock", true)) {
                     AdBlockHook(lpparam).hook()
-                    XposedBridge.log("AdBlocker: Modulo attivato")
+                    XposedBridge.log("$TAG: 广告拦截已启用")
                 }
             } catch (e: Exception) {
-                XposedBridge.log("AdBlocker fallito: ${e.message}")
+                XposedBridge.log("$TAG: 广告拦截失败 - ${e.message}")
             }
 
-            // --- BLOCCO MONET ---
+            // --- Monet 主题模块 ---
             try {
                 if (prefs.getBoolean("enable_monet", true)) {
                     ThemeHook(app, lpparam).hook()
+                    Log.d(TAG, "Monet 主题已启用")
                 }
             } catch (e: Exception) {
-                XposedBridge.log("Mod Monet fallita: ${e.message}")
+                XposedBridge.log("$TAG: Monet 主题失败 - ${e.message}")
             }
 
-            // --- BLOCCO ROUNDY (Il sospettato numero 1) ---
+            // --- 圆角 UI 模块 ---
             try {
                 if (prefs.getBoolean("enable_round_ui", true)) {
                     RoundyUIHook(lpparam).hook()
+                    Log.d(TAG, "圆角 UI 已启用")
                 }
             } catch (e: Exception) {
-                XposedBridge.log("Mod Roundy fallita: ${e.message}")
+                XposedBridge.log("$TAG: 圆角 UI 失败 - ${e.message}")
             }
-            
         }
     }
 
-    // Funzione per impostare il listener e dare feedback
     private fun setModLongClickListener(view: View, activity: Activity) {
         if (view.tag == "mod_hooked") return
         view.tag = "mod_hooked"
 
         view.setOnLongClickListener {
-            // Se la view cliccata è un contenitore (ViewGroup), cerchiamo l'immagine dentro
             val realView = if (it is ViewGroup && it.isNotEmpty()) {
                 it.getChildAt(0)
             } else {
@@ -152,12 +184,11 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
         }
     }
 
-    // Cerca l'immagine profilo basandosi sulla posizione (Top-Left)
     private fun findAvatarRecursive(view: View, activity: Activity) {
         if (view is ImageView || view.contentDescription?.toString()?.contains("Profilo", true) == true) {
             val location = IntArray(2)
             view.getLocationOnScreen(location)
-            // L'avatar è solitamente entro i primi 150px dall'alto e 150px da sinistra
+            // 头像通常在顶部 150px 和左侧 150px 内
             if (location[0] < 150 && location[1] < 200 && view.width > 0) {
                 setModLongClickListener(view, activity)
                 return
@@ -189,6 +220,10 @@ class MainHook : IXposedHookLoadPackage, IXposedHookZygoteInit {
     }
 }
 
+/**
+ * 应用上下文辅助函数
+ * 在应用的 onCreate 时获取 Application 对象
+ */
 fun inContext(lpparam: LoadPackageParam, f: (Application) -> Unit) {
     val appClazz = XposedHelpers.findClass(lpparam.appInfo.className, lpparam.classLoader)
     XposedBridge.hookMethod(appClazz.getMethod("onCreate"), object : XC_MethodHook() {
