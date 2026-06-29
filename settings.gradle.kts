@@ -21,7 +21,6 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven(url = "https://api.xposed.info") // Legacy Xposed API
-        maven(url = "https://maven.lsposed.org/releases") // LSPosed API 101+
     }
 }
 
