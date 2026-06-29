@@ -20,7 +20,8 @@ dependencyResolutionManagement {
         }
         google()
         mavenCentral()
-        maven(url = "https://api.xposed.info")
+        maven(url = "https://api.xposed.info") // Legacy Xposed API
+        maven(url = "https://maven.lsposed.org/releases") // LSPosed API 101+
     }
 }
 
@@ -30,7 +31,7 @@ plugins {
 }
 
 android {
-    compileSdk = 37
+    compileSdk = 34
     minSdk = 27
 }
 
